@@ -1,0 +1,2599 @@
+import 'package:fl_chart/fl_chart.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'dart:math'; // Random() 사용을 위해 필요
+import 'dart:async'; // 'Timer'
+import 'package:fl_chart/fl_chart.dart'; // 차트 기능을 위해 반드시 필요
+import 'package:flutter/material.dart';
+
+void main() => runApp(const TaiPayApp());
+
+class TaiPayApp extends StatefulWidget {
+  const TaiPayApp({super.key});
+
+  @override
+  State<TaiPayApp> createState() => _TaiPayAppState();
+}
+
+class _TaiPayAppState extends State<TaiPayApp> {
+  ThemeMode _themeMode = ThemeMode.system;
+
+  void _changeTheme(ThemeMode mode) {
+    setState(() {
+      _themeMode = mode;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      themeMode: _themeMode,
+      theme: ThemeData(
+        brightness: Brightness.light,
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo, brightness: Brightness.light),
+        useMaterial3: true,
+        scaffoldBackgroundColor: const Color(0xFFF2F4F6),
+        cardColor: Colors.white,
+      ),home: SplashScreen(
+      onChangeTheme: _changeTheme,
+      currentMode: _themeMode,
+    ),
+
+      darkTheme: ThemeData(
+        brightness: Brightness.dark,
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo, brightness: Brightness.dark),
+        useMaterial3: true,
+        scaffoldBackgroundColor: const Color(0xFF111111),
+        cardColor: const Color(0xFF1C1C1E),
+      ),
+    );
+  }
+}
+
+class RootScreen extends StatefulWidget {
+  final Function(ThemeMode) onChangeTheme;
+  final ThemeMode currentMode;
+
+  const RootScreen({
+    super.key,
+    required this.onChangeTheme,
+    required this.currentMode,
+  });
+
+  @override
+  State<RootScreen> createState() => _RootScreenState();
+}
+
+class _RootScreenState extends State<RootScreen> {
+  int _selectedIndex = 0;
+  late List<Widget> _pages;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializePages();
+  }
+
+  void _initializePages() {
+    _pages = [
+      const HomeScreen(),
+      const ReceiptScreen(),
+      const StockScreen(),
+      const CryptoScreen(),
+      MyScreen(
+        onChangeTheme: widget.onChangeTheme,
+        currentMode: widget.currentMode,
+      ),
+    ];
+  }
+
+  @override
+  void didUpdateWidget(covariant RootScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentMode != widget.currentMode) {
+      setState(() {
+        _initializePages();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    bool isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Scaffold(
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: _pages,
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _selectedIndex,
+        onTap: (index) => setState(() => _selectedIndex = index),
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: const Color(0xFF3182F6),
+        unselectedItemColor: isDark ? Colors.grey[600] : const Color(0xFF9E9E9E),
+        backgroundColor: Theme.of(context).cardColor,
+        elevation: 0,
+        selectedFontSize: 12,
+        unselectedFontSize: 12,
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: '首頁'),
+          BottomNavigationBarItem(icon: Icon(Icons.qr_code), label: '載具'),
+          BottomNavigationBarItem(icon: Icon(Icons.trending_up), label: '證券'),
+          BottomNavigationBarItem(icon: Icon(Icons.currency_bitcoin), label: '加密貨幣'),
+          BottomNavigationBarItem(icon: Icon(Icons.person_rounded), label: '我的'),
+        ],
+      ),
+    );
+  }
+}
+
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+
+class SplashScreen extends StatefulWidget {
+  final Function(ThemeMode) onChangeTheme;
+  final ThemeMode currentMode;
+
+  const SplashScreen({
+    super.key,
+    required this.onChangeTheme,
+    required this.currentMode,
+  });
+
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _fadeAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    );
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(_controller);
+    _controller.forward();
+
+    // 3초 후 메인(RootScreen)으로 전환
+    Timer(const Duration(seconds: 3), () {
+      if (!mounted) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => RootScreen(
+            onChangeTheme: widget.onChangeTheme,
+            currentMode: widget.currentMode,
+          ),
+        ),
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF3182F6), // 토스 블루와 맞춘 TaiPay Blue
+      body: Center(
+        child: FadeTransition(
+          opacity: _fadeAnimation,
+          child: const TaiPayLogo(size: 150), // 커스텀 로고 호출
+        ),
+      ),
+    );
+  }
+}
+
+class TaiPayLogo extends StatelessWidget {
+  final double size;
+  const TaiPayLogo({super.key, this.size = 180});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: size,
+          height: size * 1.2,
+          child: CustomPaint(painter: _Taipei101Painter()),
+        ),
+        const SizedBox(height: 30),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text("Tai", style: TextStyle(color: Colors.white, fontSize: 48, fontWeight: FontWeight.bold)),
+            Text("Pay", style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 48, fontWeight: FontWeight.w900)),
+          ],
+        ),
+        const SizedBox(height: 10),
+        const Text("台灣人的錢包", style: TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.w500)),
+      ],
+    );
+  }
+}
+
+class _Taipei101Painter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = size.width * 0.025
+      ..strokeCap = StrokeCap.round;
+
+    final path = Path();
+    final double w = size.width;
+    final double h = size.height;
+
+    double currentH = h * 0.4;
+    double segmentW = w * 0.4;
+    for (int i = 0; i < 8; i++) {
+      path.moveTo(w * 0.5 - segmentW / 2, currentH);
+      path.lineTo(w * 0.5 - segmentW * 0.4 / 2, currentH - h * 0.04);
+      path.lineTo(w * 0.5 + segmentW * 0.4 / 2, currentH - h * 0.04);
+      path.lineTo(w * 0.5 + segmentW / 2, currentH);
+      currentH -= h * 0.04;
+      segmentW *= 0.92;
+    }
+    path.moveTo(w * 0.5, currentH);
+    path.lineTo(w * 0.5, h * 0.05);
+
+    // 하단 무한대(∞) 심볼
+    final double infoCenterY = h * 0.6;
+    final double infoRadius = w * 0.25;
+    path.addOval(Rect.fromCircle(center: Offset(w * 0.35, infoCenterY), radius: infoRadius * 0.8));
+    path.addOval(Rect.fromCircle(center: Offset(w * 0.65, infoCenterY), radius: infoRadius * 0.8));
+    path.moveTo(w * 0.5, h * 0.4);
+    path.lineTo(w * 0.5, h * 0.8);
+
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+// [1] 홈 화면
+class HomeScreen extends StatelessWidget {
+  const HomeScreen({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFF2F4F6),
+        elevation: 0,
+        title: const Text('TaiPay', style: TextStyle(color: Color(0xFF3182F6), fontWeight: FontWeight.w900, fontSize: 26)),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+        child: Column(children: [
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 22),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(26)),
+            child: Row(children: [
+              _quickMenu(context, Icons.send_rounded, "轉帳", const Color(0xFF3182F6), const TransferScreen()),
+              _quickMenu(context, Icons.qr_code_scanner_rounded, "掃碼支付", const Color(0xFF3182F6), const PaymentScreen()),
+              _quickMenu(context, Icons.history_rounded, "交易紀錄", const Color(0xFF4E5968), const HistoryScreen()),
+            ]),
+          ),
+          const SizedBox(height: 16),
+          InkWell(
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const AccountListScreen())),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(26)),
+              child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                  Text("我的帳戶", style: TextStyle(color: Color(0xFF6B7684), fontWeight: FontWeight.w600)),
+                  Icon(Icons.arrow_forward_ios, size: 14, color: Color(0xFFB0B8C1)),
+                ]),
+                SizedBox(height: 8),
+                Text("NT\$ 125,430", style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+              ]),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _quickMenu(BuildContext context, IconData icon, String label, Color color, Widget page) {
+    return Expanded(child: InkWell(
+      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (c) => page)),
+      child: Column(children: [Icon(icon, color: color, size: 32), const SizedBox(height: 8), Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))]),
+    ));
+  }
+}
+
+// [2] 상세 계좌 목록
+class AccountListScreen extends StatelessWidget {
+  const AccountListScreen({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(title: const Text("已連結帳戶", style: TextStyle(fontWeight: FontWeight.bold)), backgroundColor: Colors.white, elevation: 0),
+      body: ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          _buildBankItem("822", "中國信託 (CTBC)", "NT\$ 12,000", Colors.green),
+          _buildBankItem("013", "國泰世華 (Cathay)", "NT\$ 5,400", Colors.lightGreen),
+          _buildBankItem("012", "台北富邦 (Fubon)", "NT\$ 85,200", Colors.blue),
+          _buildBankItem("700", "中華郵政 (Post)", "NT\$ 1,200", Colors.green[800]!),
+          _buildBankItem("812", "台新銀行 (Taishin)", "NT\$ 21,630", Colors.red[900]!),
+          const SizedBox(height: 30),
+          OutlinedButton.icon(
+            onPressed: () {},
+            icon: const Icon(Icons.add),
+            label: const Text("連結新帳戶"),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 55),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBankItem(String code, String name, String bal, Color color) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(vertical: 4),
+      leading: CircleAvatar(
+        backgroundColor: color.withOpacity(0.1),
+        child: Text(code, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold)),
+      ),
+      title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
+      subtitle: Text(bal),
+      trailing: const Icon(Icons.more_vert, color: Colors.grey),
+    );
+  }
+}
+
+class AccountDetailScreen extends StatelessWidget {
+  final String bankName;
+  final String balance;
+  const AccountDetailScreen({super.key, required this.bankName, required this.balance});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(backgroundColor: Colors.white, elevation: 0, title: Text(bankName)),
+      body: Column(
+        children: [
+          const SizedBox(height: 20),
+          Text(bankName, style: const TextStyle(color: Colors.grey)),
+          Text(balance, style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 20),
+          // 송금 버튼 (클릭 시 기존 TransferScreen으로 이동)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 50),
+            child: ElevatedButton(
+              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (c) => const TransferScreen())),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF3182F6),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.send, size: 16), SizedBox(width: 8), Text("轉帳")]),
+            ),
+          ),
+          const SizedBox(height: 30),
+          const Divider(thickness: 8, color: Color(0xFFF2F4F6)),
+          Expanded(
+            child: ListView(
+              children: [
+                const Padding(padding: EdgeInsets.all(20), child: Text("交易紀錄", style: TextStyle(fontWeight: FontWeight.bold))),
+                _historyTile("2026/04/03", "全家便利商店", "- NT\$ 85", false),
+                _historyTile("2026/04/02", "薪資입금", "+ NT\$ 50,000", true),
+                _historyTile("2026/04/01", "ATM 출금", "- NT\$ 1,000", false),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _historyTile(String date, String title, String amount, bool isPlus) {
+    return ListTile(
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
+      subtitle: Text(date),
+      trailing: Text(amount, style: TextStyle(fontWeight: FontWeight.bold, color: isPlus ? Colors.blue : Colors.black)),
+    );
+  }
+}
+
+// [3] 송금 (轉帳)
+class TransferScreen extends StatefulWidget {
+  final String? initialBank; // 계좌 상세에서 넘어올 경우 대비
+  const TransferScreen({super.key, this.initialBank});
+
+  @override State<TransferScreen> createState() => _TransferScreenState();
+}
+
+class _TransferScreenState extends State<TransferScreen> {
+  int step = 1;
+  String? bank;
+  String myAcc = "TaiPay 主帳戶";
+  double myBalance = 125430.0; // 현재 선택된 계좌의 잔액 (예시)
+
+  final TextEditingController _accController = TextEditingController();
+  final TextEditingController _amtController = TextEditingController();
+
+  // 버튼 활성화 로직
+  bool get isStep1Valid => bank != null && _accController.text.length == 10;
+
+  // 금액 입력 시: 비어있지 않음 + 숫자임 + 잔액보다 작거나 같음
+  bool get isStep3Valid {
+    if (_amtController.text.isEmpty) return false;
+    double? inputAmt = double.tryParse(_amtController.text);
+    return inputAmt != null && inputAmt > 0 && inputAmt <= myBalance;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialBank != null) bank = widget.initialBank;
+
+    // 입력할 때마다 UI 갱신 (버튼 색상 변경용)
+    _accController.addListener(() => setState(() {}));
+    _amtController.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _accController.dispose();
+    _amtController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
+          onPressed: () => step > 1 ? setState(() => step--) : Navigator.pop(context),
+        ),
+      ),
+      body: Padding(padding: const EdgeInsets.symmetric(horizontal: 24), child: _buildFlow()),
+    );
+  }
+
+  Widget _buildFlow() {
+    if (step == 1) return _step1();
+    if (step == 2) return _step2();
+    if (step == 3) return _step3();
+    return _step4(); // 확인 화면
+  }
+
+  // 1단계: 입금처 정보
+  Widget _step1() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    const Text("想轉帳給誰？", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+    const SizedBox(height: 30),
+    DropdownButtonFormField<String>(
+      value: bank,
+      decoration: _inputDeco(label: "選擇銀行"),
+      items: const [
+        DropdownMenuItem(value: "822 中國信託", child: Text("822 中國信託")),
+        DropdownMenuItem(value: "013 國泰世華", child: Text("013 國泰世華")),
+        DropdownMenuItem(value: "012 台北富邦", child: Text("012 台北富邦")),
+      ],
+      onChanged: (v) => setState(() => bank = v),
+    ),
+    const SizedBox(height: 16),
+    TextField(
+      controller: _accController,
+      maxLength: 10,
+      decoration: _inputDeco(label: "輸入帳號 (10碼)"),
+      keyboardType: TextInputType.number,
+    ),
+    const Spacer(),
+    _actionBtn("下一步", isStep1Valid, () => setState(() => step = 2)),
+  ]);
+
+  // 2단계: 출금 계좌 선택
+  Widget _step2() => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    const Text("從哪個帳戶扣款？", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+    const SizedBox(height: 20),
+    _radioTile("TaiPay 主帳戶", 125430),
+    _radioTile("中國信託", 12000),
+    const Spacer(),
+    _actionBtn("下一步", true, () => setState(() => step = 3)),
+  ]);
+
+  // 3단계: 금액 입력 (잔액 리밋 체크)
+  Widget _step3() {
+    double? currentInput = double.tryParse(_amtController.text) ?? 0;
+    bool isOver = currentInput > myBalance;
+
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text("餘額: NT\$ ${myBalance.toStringAsFixed(0)}", style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+      const SizedBox(height: 10),
+      const Text("請輸入金額", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
+      const SizedBox(height: 40),
+      TextField(
+        controller: _amtController,
+        autofocus: true,
+        style: TextStyle(fontSize: 44, fontWeight: FontWeight.bold, color: isOver ? Colors.red : Colors.black),
+        decoration: const InputDecoration(suffixText: "NTD", border: InputBorder.none, hintText: "0"),
+        keyboardType: TextInputType.number,
+      ),
+      if (isOver) const Text("輸入金額已超過餘額", style: TextStyle(color: Colors.red, fontSize: 14)),
+      const Spacer(),
+      _actionBtn("下一步", isStep3Valid, () => setState(() => step = 4)),
+    ]);
+  }
+
+  // 4단계: 최종 확인 화면
+  Widget _step4() => Column(children: [
+    const SizedBox(height: 40),
+    Text("是否轉帳\n${_amtController.text} 元給鄭聖雨 ?", textAlign: TextAlign.center, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+    const SizedBox(height: 40),
+    _rowInfo("出款帳戶", myAcc),
+    _rowInfo("入款帳戶", "$bank / ${_accController.text}"),
+    const Spacer(),
+    _actionBtn("轉帳", true, () {
+      // 완료 팝업 후 홈으로 이동
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("轉帳已完成")));
+      Navigator.popUntil(context, (route) => route.isFirst);
+    }),
+  ]);
+
+  Widget _radioTile(String title, double bal) {
+    String fullTitle = "$title (NT\$ $bal)";
+    return ListTile(
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+      subtitle: Text("餘額: NT\$ $bal"),
+      leading: Radio<String>(
+          value: title,
+          groupValue: myAcc,
+          onChanged: (v) => setState(() { myAcc = v!; myBalance = bal; })
+      ),
+      onTap: () => setState(() { myAcc = title; myBalance = bal; }),
+    );
+  }
+
+  Widget _rowInfo(String l, String v) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 16),
+    child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(l, style: const TextStyle(color: Colors.grey, fontSize: 16)),
+      Text(v, textAlign: TextAlign.right, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+    ]),
+  );
+
+  InputDecoration _inputDeco({required String label}) => InputDecoration(
+      labelText: label, filled: true, fillColor: const Color(0xFFF2F4F6),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none)
+  );
+
+  Widget _actionBtn(String label, bool active, VoidCallback onPressed) => Padding(
+    padding: const EdgeInsets.only(bottom: 24),
+    child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+            backgroundColor: active ? const Color(0xFF3182F6) : Colors.grey[300],
+            foregroundColor: Colors.white,
+            minimumSize: const Size(double.infinity, 64),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            elevation: 0
+        ),
+        onPressed: active ? onPressed : null,
+        child: Text(label, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold))
+    ),
+  );
+}
+
+// [4] 결제 (掃碼支付)
+class PaymentScreen extends StatefulWidget {
+  const PaymentScreen({super.key});
+  @override State<PaymentScreen> createState() => _PaymentScreenState();
+}
+class _PaymentScreenState extends State<PaymentScreen> {
+  String selectedAcc = "TaiPay 主帳戶 (NT\$ 50,430)";
+  @override
+  Widget build(BuildContext context) {
+    return DefaultTabController(length: 2, child: Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(backgroundColor: Colors.white, elevation: 0, title: const Text("TaiPay", style: TextStyle(fontWeight: FontWeight.bold)), bottom: const TabBar(indicatorColor: Color(0xFF3182F6), labelColor: Color(0xFF3182F6), tabs: [Tab(text: "條碼/QR碼"), Tab(text: "掃描")])),
+      body: TabBarView(children: [
+        _barcodeView(),
+        const Center(child: Text("Camera")),
+      ]),
+    ));
+  }
+  Widget _barcodeView() => Padding(padding: const EdgeInsets.all(32), child: Column(children: [
+    Container(height: 80, width: double.infinity, color: const Color(0xFFF2F4F6), child: const Center(child: Text("|||||||||||||||||||||||", style: TextStyle(letterSpacing: 5)))),
+    const SizedBox(height: 30),
+    Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(border: Border.all(color: const Color(0xFFF2F4F6)), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.qr_code_2, size: 150)),
+    const Spacer(),
+    DropdownButton<String>(isExpanded: true, value: selectedAcc, items: ["TaiPay 主帳戶 (NT\$ 50,430)", "中國信託 (NT\$ 12,000)"].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(), onChanged: (v) => setState(() => selectedAcc = v!)),
+  ]));
+}
+
+// [5] 거래 기록 (交易紀錄)
+class HistoryScreen extends StatelessWidget {
+  const HistoryScreen({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(title: const Text("交易紀錄"), backgroundColor: Colors.white),
+      body: ListView(children: [
+        _historyTile("2026/04/03 08:30", "7-ELEVEN 德陽門市", "- NT\$ 125", false),
+        _historyTile("2026/04/02 12:00", "轉帳收入 (王小明)", "+ NT\$ 1,000", true),
+      ]),
+    );
+  }
+  Widget _historyTile(String d, String t, String a, bool p) => ListTile(
+    title: Text(t, style: const TextStyle(fontWeight: FontWeight.bold)), subtitle: Text(d),
+    trailing: Text(a, style: TextStyle(fontWeight: FontWeight.bold, color: p ? Colors.red : Colors.black)),
+  );
+}
+
+// [6] 자이쮜 관리 (載具管理)
+class ReceiptScreen extends StatefulWidget {
+  const ReceiptScreen({super.key});
+  @override
+  State<ReceiptScreen> createState() => _ReceiptScreenState();
+}
+
+class _ReceiptScreenState extends State<ReceiptScreen> {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF2F4F6),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFF2F4F6),
+        elevation: 0,
+        title: const Text("載具管理", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        actions: [
+          IconButton(onPressed: () {}, icon: const Icon(Icons.settings_outlined, color: Color(0xFF4E5968))),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Column(children: [
+          // 1. 메인 자이쮜 바코드 카드
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(26),
+            ),
+            child: Column(children: [
+              const Row(children: [
+                Icon(Icons.qr_code_2, color: Color(0xFF3182F6), size: 20),
+                SizedBox(width: 8),
+                Text("手機條碼", style: TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF4E5968))),
+              ]),
+              const SizedBox(height: 20),
+              // 바코드 이미지 영역 (실제로는 바코드 폰트나 이미지를 넣음)
+              Container(
+                height: 100,
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF9FAFB),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Text("/ABC-1234", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 2)),
+                  SizedBox(height: 8),
+                  Text("|||| ||| || ||||| || ||| ||||", style: TextStyle(fontSize: 30, letterSpacing: 1)),
+                ]),
+              ),
+              const SizedBox(height: 16),
+              const Text("請在付款前出示給店員", style: TextStyle(color: Color(0xFF8B95A1), fontSize: 13)),
+            ]),
+          ),
+
+          const SizedBox(height: 16),
+
+          // 2. 당첨 확인 섹션 (대만의 발표일에 맞춰 강조)
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(26)),
+            child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text("3-4月統一發票中獎查詢", style: TextStyle(fontSize: 15, color: Color(0xFF4E5968))),
+                SizedBox(height: 4),
+                Text("尚未公布", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              ]),
+              ElevatedButton(
+                onPressed: () {},
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFF2F4F6),
+                  foregroundColor: const Color(0xFF4E5968),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: const Text("查看"),
+              ),
+            ]),
+          ),
+
+          const SizedBox(height: 16),
+
+          // 3. 최근 영수증 목록
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(26)),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text("最新發票", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 20),
+              _receiptTile("2026/04/03", "7-ELEVEN", "NT\$ 45"),
+              _receiptTile("2026/04/02", "FamilyMart", "NT\$ 120"),
+              _receiptTile("2026/04/01", "Starbucks", "NT\$ 165"),
+              const SizedBox(height: 10),
+              Center(
+                child: TextButton(
+                  onPressed: () {},
+                  child: const Text("查看全部紀錄", style: TextStyle(color: Color(0xFF6B7684))),
+                ),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 30),
+        ]),
+      ),
+    );
+  }
+
+  Widget _receiptTile(String date, String store, String price) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(store, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+          Text(date, style: const TextStyle(color: Color(0xFF8B95A1), fontSize: 13)),
+        ]),
+        Text(price, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+      ]),
+    );
+  }
+}
+
+// [7] 증권 (證券 - 상세 구현)
+class StockScreen extends StatefulWidget {
+  const StockScreen({super.key});
+  @override
+  State<StockScreen> createState() => _StockScreenState();
+}
+
+class _StockScreenState extends State<StockScreen> {
+
+  final List<Map<String, dynamic>> myHoldings = [
+    {
+      'name': 'TSMC (2330)',
+      'shares': '10 股',
+      'price': '7,800',
+      'profit': '+2.4%'
+    },
+    {
+      'name': 'Apple (AAPL)',
+      'shares': '2 股',
+      'price': '11,500',
+      'profit': '+0.8%'
+    },
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF2F4F6),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFF2F4F6),
+        elevation: 0,
+        title: const Text(
+            "證券", style: TextStyle(fontWeight: FontWeight.bold)),
+        actions: [
+          IconButton(onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const StockSearchPage()),
+            );
+          },
+              icon: const Icon(Icons.search, color: Color(0xFF4E5968))),
+          IconButton(onPressed: () {},
+              icon: const Icon(
+                  Icons.settings_outlined, color: Color(0xFF4E5968))),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // 1. 내 주식 자산 요약
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+                color: Colors.white, borderRadius: BorderRadius.circular(26)),
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text("投資資產", style: TextStyle(
+                  color: Color(0xFF6B7684), fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              const Text("NT\$ 852,400",
+                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              Row(children: [
+                const Text("+ NT\$ 12,400 (1.47%)", style: TextStyle(
+                    color: Colors.red, fontWeight: FontWeight.w600)),
+                const SizedBox(width: 4),
+                Text("今天",
+                    style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+              ]),
+              const SizedBox(height: 20),
+              const Divider(),
+              const SizedBox(height: 10),
+              Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
+                _stockActionBtn(
+                    Icons.account_balance_wallet_outlined, "帳戶明細"),
+                _stockActionBtn(Icons.auto_graph_outlined, "投資報酬率"),
+                _stockActionBtn(Icons.notifications_none_outlined, "通知"),
+              ]),
+            ]),
+          ),
+          const SizedBox(height: 24),
+          const Text("我的持股", style: TextStyle(fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF4E5968))),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+                color: Colors.white, borderRadius: BorderRadius.circular(26)),
+            child: Column(
+              children: myHoldings
+                  .map((stock) => _holdingStockTile(stock))
+                  .toList(),
+            ),
+          ),
+          const SizedBox(height: 24),
+          const Text("關注標的", style: TextStyle(fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF4E5968))),
+          const SizedBox(height: 12),
+
+          // 2. 관심 종목 리스트 (대만 주요 주식 예시)
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+                color: Colors.white, borderRadius: BorderRadius.circular(26)),
+            child: Column(children: [
+              _interestStockTile("TSMC (2330)", "780.00", "+2.4%", true),
+              _interestStockTile("鴻海 (2317)", "155.50", "-0.3%", false),
+              _interestStockTile("聯發科 (2454)", "1,120.00", "+1.2%", true),
+              _interestStockTile("NVIDIA (NVDA)", "903.60", "+0.8%", true),
+              // 미국주식 포함 가능
+              const Divider(indent: 20, endIndent: 20),
+              TextButton(
+                onPressed: () {},
+                child: const Text(
+                    "更多", style: TextStyle(color: Color(0xFF6B7684))),
+              ),
+            ]),
+          ),
+
+          const SizedBox(height: 24),
+          const Text("今日指數", style: TextStyle(fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF4E5968))),
+          const SizedBox(height: 12),
+
+          // 3. 시장 지수 카드 (가로 스크롤)
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(children: [
+              _marketIndexCard("加權指數 (TWII)", "20,330.5", "+0.9%"),
+              _marketIndexCard("納斯達克 (NASDAQ)", "16,396.8", "+1.1%"),
+              _marketIndexCard("S&P 500", "5,254.3", "+0.4%"),
+            ]),
+          ),
+          const SizedBox(height: 30),
+        ]),
+      ),
+    );
+  }
+
+  Widget _stockActionBtn(IconData icon, String label) {
+    return Column(children: [
+      Icon(icon, color: const Color(0xFF4E5968)),
+      const SizedBox(height: 8),
+      Text(label,
+          style: const TextStyle(fontSize: 12, color: Color(0xFF4E5968))),
+    ]);
+  }
+
+  Widget _holdingStockTile(Map<String, dynamic> stock) {
+    return ListTile(
+      onTap: () {
+        // [핵심] 보유 종목의 데이터 이름을 상세 페이지 규격에 맞게 변환해서 넘겨줌
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => StockDetailScreen(stock: {
+              'name': stock['name'],
+              'price': stock['price'],
+              'change': stock['profit'] ?? stock['change'] ?? "0.0%", // profit이 없으면 change를, 그것도 없으면 기본값
+              'isUp': stock['isUp'] ?? (stock['profit']?.toString().contains('+') ?? true),
+            }),
+          ),
+        );
+      },
+      leading: CircleAvatar(
+        backgroundColor: const Color(0xFFF2F4F6),
+        child: Text(stock['name'][0], style: const TextStyle(color: Color(0xFF3182F6))),
+      ),
+      title: Text(stock['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+      subtitle: Text("${stock['shares'] ?? '0'} 股"),
+      trailing: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(stock['price'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          Text(
+            stock['profit'] ?? "0.0%",
+            style: TextStyle(
+                color: (stock['profit']?.toString().contains('+') ?? true) ? Colors.red : Colors.green,
+                fontWeight: FontWeight.w600
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+// 관심 종목 타일 수정
+  Widget _interestStockTile(String name, String price, String change, bool isUp) {
+    return ListTile(
+      // 이 onTap 부분이 추가되어야 클릭 시 상세페이지로 이동합니다.
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => StockDetailScreen(stock: {
+              'name': name,
+              'price': price,
+              'change': change,
+              'isUp': isUp,
+            }),
+          ),
+        );
+      },
+      leading: CircleAvatar(
+        backgroundColor: const Color(0xFFF2F4F6),
+        child: Text(name[0], style: const TextStyle(color: Color(0xFF3182F6))),
+      ),
+      title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
+      trailing: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(price, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          Text(change, style: TextStyle(color: isUp ? Colors.red : Colors.green, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+
+  Widget _marketIndexCard(String title, String index, String change) {
+    final bool isUp = change.contains('+');
+    return InkWell(
+      // 카드를 클릭했을 때 상세페이지로 이동하도록 수정
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => StockDetailScreen(stock: {
+              'name': title,
+              'price': index,
+              'change': change,
+              'isUp': isUp,
+            }),
+          ),
+        );
+      },
+      child: Container(
+        width: 160,
+        margin: const EdgeInsets.only(right: 12),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(title, style: const TextStyle(fontSize: 13, color: Color(0xFF6B7684))),
+          const SizedBox(height: 10),
+          Text(index, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          // 대만 하락색인 초록색(Colors.green)으로 통일
+          Text(change, style: TextStyle(color: isUp ? Colors.red : Colors.green, fontWeight: FontWeight.w600)),
+        ]),
+      ),
+    );
+  }
+}
+
+class StockSearchPage extends StatefulWidget {
+  const StockSearchPage({super.key});
+
+  @override
+  State<StockSearchPage> createState() => _StockSearchPageState();
+}
+
+class _StockSearchPageState extends State<StockSearchPage> {
+  final TextEditingController _controller = TextEditingController();
+
+  // 실제 대만/미국 시장 주요 종목 샘플 데이터
+  final List<Map<String, dynamic>> _allStocks = [
+    {"name": "TSMC (2330)", "price": "780.00", "change": "+2.4%", "isUp": true},
+    {"name": "鴻海 (2317)", "price": "155.50", "change": "-0.3%", "isUp": false},
+    {"name": "聯發코 (2454)", "price": "1,120.00", "change": "+1.2%", "isUp": true},
+    {"name": "NVIDIA (NVDA)", "price": "903.60", "change": "+0.8%", "isUp": true},
+    {"name": "Apple (AAPL)", "price": "170.30", "change": "-1.1%", "isUp": false},
+    {"name": "Tesla (TSLA)", "price": "175.40", "change": "+0.5%", "isUp": true},
+  ];
+
+  List<Map<String, dynamic>> _filteredStocks = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _filteredStocks = _allStocks; // 처음엔 전체 다 보여줌
+  }
+
+  void _runFilter(String enteredKeyword) {
+    List<Map<String, dynamic>> results = [];
+    if (enteredKeyword.isEmpty) {
+      results = _allStocks;
+    } else {
+      results = _allStocks
+          .where((stock) => stock["name"].toLowerCase().contains(enteredKeyword.toLowerCase()))
+          .toList();
+    }
+    setState(() {
+      _filteredStocks = results;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: TextField(
+          controller: _controller,
+          onChanged: (value) => _runFilter(value),
+          decoration: const InputDecoration(
+            hintText: "종목명 또는 코드 검색",
+            border: InputBorder.none,
+          ),
+          autofocus: true, // 페이지 열리자마자 키보드 작동
+        ),
+      ),
+      body: ListView.builder(
+        itemCount: _filteredStocks.length,
+        itemBuilder: (context, index) => ListTile(
+          onTap: () {
+            // [검색 결과 클릭 시 상세 페이지로 이동]
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => StockDetailScreen(stock: _filteredStocks[index]),
+              ),
+            );
+          },
+          title: Text(_filteredStocks[index]['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+          trailing: Text(_filteredStocks[index]['price'], style: const TextStyle(fontSize: 16)),
+        ),
+      ),
+    );
+  }
+}
+
+// [최종 상세 페이지] 기간 선택 + 실시간 호가 + 거래 기능 포함
+class StockDetailScreen extends StatefulWidget {
+  final Map<String, dynamic> stock;
+  const StockDetailScreen({super.key, required this.stock});
+
+  @override
+  State<StockDetailScreen> createState() => _StockDetailScreenState();
+}
+
+class _StockDetailScreenState extends State<StockDetailScreen> {
+  String selectedPeriod = "1일";
+  final List<String> periods = ["1일", "7일", "1개월", "3개월", "1년", "전체"];
+
+  // 매수/매도 주문 팝업창
+  void _showTradeSheet(String type) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, top: 20, left: 20, right: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text("${widget.stock['name']} ${type == 'buy' ? '買入 (매수)' : '賣出 (매도)'}",
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              const Text("현재가"),
+              Text("NT\$ ${widget.stock['price']}", style: const TextStyle(fontWeight: FontWeight.bold)),
+            ]),
+            const SizedBox(height: 20),
+            TextField(
+              keyboardType: TextInputType.number,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: "수량 (股)",
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: type == 'buy' ? Colors.red : Colors.blue,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text("주문하기", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 호가창 한 줄 위젯
+  Widget _orderRow(String price, String volume, Color bgColor, Color textColor, {bool isCurrent = false}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 15),
+      margin: const EdgeInsets.symmetric(vertical: 1),
+      decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(8)),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(price, style: TextStyle(color: textColor, fontWeight: isCurrent ? FontWeight.bold : FontWeight.w500)),
+          Text(volume, style: TextStyle(color: textColor.withOpacity(0.6), fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isUp = widget.stock['isUp'] ?? (widget.stock['change']?.contains('+') ?? true);
+    final Color trendColor = isUp ? Colors.red : Colors.green;
+
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Colors.white,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.black),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(widget.stock['name'], style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+      ),
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 1. 상단 가격 정보
+            Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("NT\$ ${widget.stock['price']}", style: const TextStyle(fontSize: 36, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Text(widget.stock['change'], style: TextStyle(color: trendColor, fontSize: 20, fontWeight: FontWeight.bold)),
+                ],
+              ),
+            ),
+
+            // 2. 차트 영역
+            Container(
+              height: 200,
+              width: double.infinity,
+              color: Colors.white,
+              child: Center(child: Icon(Icons.show_chart, size: 100, color: trendColor.withOpacity(0.2))),
+            ),
+
+            // 3. 기간 선택 바
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              child: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(color: const Color(0xFFF2F4F6), borderRadius: BorderRadius.circular(15)),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: periods.map((p) => GestureDetector(
+                    onTap: () => setState(() => selectedPeriod = p),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: selectedPeriod == p ? Colors.white : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                        boxShadow: selectedPeriod == p ? [const BoxShadow(color: Colors.black12, blurRadius: 4)] : [],
+                      ),
+                      child: Text(p, style: TextStyle(color: selectedPeriod == p ? Colors.black : Colors.grey, fontWeight: selectedPeriod == p ? FontWeight.bold : FontWeight.normal)),
+                    ),
+                  )).toList(),
+                ),
+              ),
+            ),
+
+            // 4. 실시간 호가창
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text("五檔報價 (실시간 호가)", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 12),
+                  _orderRow("782.00", "1,204", Colors.blue[50]!, Colors.blue),
+                  _orderRow("781.00", "856", Colors.blue[50]!, Colors.blue),
+                  _orderRow(widget.stock['price'], "현재가", Colors.grey[100]!, Colors.black, isCurrent: true),
+                  _orderRow("779.00", "2,103", Colors.red[50]!, Colors.red),
+                  _orderRow("778.00", "1,544", Colors.red[50]!, Colors.red),
+                ],
+              ),
+            ),
+
+            // 5. 하단 거래 버튼
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => _showTradeSheet('sell'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue[50],
+                        foregroundColor: Colors.blue,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: const Text("賣出 (매도)", style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => _showTradeSheet('buy'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: const Text("買入 (매수)", style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 50),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// [8] 가상화폐 (虛擬貨幣 - 상세 구현)
+class CryptoScreen extends StatefulWidget {
+  const CryptoScreen({super.key});
+  @override
+  State<CryptoScreen> createState() => _CryptoScreenState();
+}
+
+class _CryptoScreenState extends State<CryptoScreen> {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF2F4F6),
+      // CryptoScreen의 AppBar 부분 수정
+      appBar: AppBar(
+        backgroundColor: const Color(0xFFF2F4F6),
+        elevation: 0,
+        title: const Text(
+            "虛擬貨幣", style: TextStyle(fontWeight: FontWeight.bold)),
+        actions: [
+          IconButton(
+            onPressed: () {
+              // [검색 페이지로 이동]
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const CryptoSearchPage()),
+              );
+            },
+            icon: const Icon(
+                Icons.search, color: Color(0xFF4E5968)), // 돋보기 아이콘으로 변경 추천
+          ),
+          IconButton(onPressed: () {},
+              icon: const Icon(
+                  Icons.settings_outlined, color: Color(0xFF4E5968))),
+        ],
+      ),
+
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // 1. 총 가상자산 요약
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+                color: Colors.white, borderRadius: BorderRadius.circular(26)),
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text("虛擬資產總額", style: TextStyle(
+                  color: Color(0xFF6B7684), fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              const Text("NT\$ 42,500",
+                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 4),
+              const Text("+ NT\$ 3,120 (7.91%)", style: TextStyle(
+                  color: Colors.red, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 24),
+              Row(children: [
+                _cryptoMenuBtn("充值"),
+                const SizedBox(width: 12),
+                _cryptoMenuBtn("轉出"),
+              ]),
+            ]),
+          ),
+
+          const SizedBox(height: 24),
+          const Text("市場行情", style: TextStyle(fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF4E5968))),
+          const SizedBox(height: 12),
+
+          // 2. 코인 리스트
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+                color: Colors.white, borderRadius: BorderRadius.circular(26)),
+            child: Column(children: [
+              // CryptoScreen의 _coinTile 호출부 수정
+              _coinTile("比特幣", "BTC", "2,145,300", "+1.2%", true,
+                  Icons.currency_bitcoin),
+              _coinTile("以太幣", "ETH", "112,400", "+0.8%", true,
+                  Icons.diamond_outlined),
+// WbSunnyOutlined -> wb_sunny_outlined (소문자로 변경)
+              _coinTile("索拉納", "SOL", "5,420", "-2.1%", false,
+                  Icons.wb_sunny_outlined),
+// WavesOutlined -> water_drop_outlined (존재하는 아이콘으로 변경)
+              _coinTile("瑞波幣", "XRP", "19.5", "+0.4%", true,
+                  Icons.water_drop_outlined),
+              const Divider(indent: 20, endIndent: 20),
+              TextButton(
+                onPressed: () {},
+                child: const Text("新增資產", style: TextStyle(
+                    color: Color(0xFF3182F6), fontWeight: FontWeight.w600)),
+              ),
+            ]),
+          ),
+
+          const SizedBox(height: 24),
+          // 3. 간단한 팁/배너
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                  colors: [Color(0xFF3182F6), Color(0xFF0048B3)]),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text("第一次投資加密貨幣遇到困難嗎？",
+                    style: TextStyle(color: Colors.white70, fontSize: 13)),
+                SizedBox(height: 4),
+                Text("查看比特幣購買指南", style: TextStyle(color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15)),
+              ]),
+              Icon(Icons.arrow_forward_ios, color: Colors.white, size: 16),
+            ]),
+          ),
+          const SizedBox(height: 30),
+        ]),
+      ),
+    );
+  }
+
+  Widget _cryptoMenuBtn(String label) {
+    return Expanded(
+      child: ElevatedButton(
+        onPressed: () {},
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFFF2F4F6),
+          foregroundColor: const Color(0xFF4E5968),
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14)),
+        ),
+        child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+      ),
+    );
+  }
+
+  Widget _coinTile(String name, String symbol, String price, String change,
+      bool isUp, IconData icon) {
+    return ListTile(
+      onTap: () {
+        // 🚀 이름을 CryptoDetailPage -> CryptoDetailScreen으로 변경!
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) =>
+                CryptoDetailScreen( // <--- 여기 이름을 아까 만든 거랑 똑같이!
+                  stock: {
+                    'name': name,
+                    'symbol': symbol,
+                    'price': price,
+                    'change': change,
+                    'isUp': isUp,
+                  },
+                ),
+          ),
+        );
+      },
+      leading: CircleAvatar(
+        backgroundColor: const Color(0xFFF2F4F6),
+        child: Icon(icon, color: const Color(0xFF3182F6), size: 20),
+      ),
+      title: Text(name, style: const TextStyle(fontWeight: FontWeight.bold)),
+      subtitle: Text(
+          symbol, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+      trailing: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text("NT\$ $price", style: const TextStyle(
+                fontWeight: FontWeight.bold, fontSize: 15)),
+            Text(change, style: TextStyle(
+                color: isUp ? Colors.red : Colors.blue,
+                fontWeight: FontWeight.w600,
+                fontSize: 13)),
+          ]
+      ),
+    );
+  }
+}
+
+class CryptoSearchPage extends StatefulWidget {
+  const CryptoSearchPage({super.key});
+
+  @override
+  State<CryptoSearchPage> createState() => _CryptoSearchPageState();
+}
+
+class _CryptoSearchPageState extends State<CryptoSearchPage> {
+  final TextEditingController _controller = TextEditingController();
+
+  // 검색 대상 코인 데이터 (필요에 따라 추가하세요)
+  final List<Map<String, dynamic>> _allCoins = [
+    {"name": "比特幣", "symbol": "BTC", "price": "2,145,300", "change": "+1.2%", "isUp": true, "icon": Icons.currency_bitcoin},
+    {"name": "以太幣", "symbol": "ETH", "price": "112,400", "change": "+0.8%", "isUp": true, "icon": Icons.diamond_outlined},
+    {"name": "索拉納", "symbol": "SOL", "price": "5,420", "change": "-2.1%", "isUp": false, "icon": Icons.wb_sunny_outlined},
+    {"name": "瑞波幣", "symbol": "XRP", "price": "19.5", "change": "+0.4%", "isUp": true, "icon": Icons.water_drop_outlined},
+    {"name": "狗狗幣", "symbol": "DOGE", "price": "5.2", "change": "-1.5%", "isUp": false, "icon": Icons.pets},
+  ];
+
+  List<Map<String, dynamic>> _filteredCoins = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _filteredCoins = _allCoins;
+  }
+
+  void _runFilter(String enteredKeyword) {
+    List<Map<String, dynamic>> results = [];
+    if (enteredKeyword.isEmpty) {
+      results = _allCoins;
+    } else {
+      results = _allCoins
+          .where((coin) =>
+      coin["name"].contains(enteredKeyword) ||
+          coin["symbol"].toLowerCase().contains(enteredKeyword.toLowerCase()))
+          .toList();
+    }
+    setState(() {
+      _filteredCoins = results;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: TextField(
+          controller: _controller,
+          onChanged: (value) => _runFilter(value),
+          decoration: const InputDecoration(
+            hintText: "코인명 또는 심볼 검색 (BTC, 比특...)",
+            border: InputBorder.none,
+          ),
+          autofocus: true,
+        ),
+      ),
+      body: ListView.builder(
+        itemCount: _filteredCoins.length,
+        itemBuilder: (context, index) => ListTile(
+          onTap: () {
+            // [중요] 코인 전용 상세 페이지로 이동
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => CryptoDetailScreen(stock: {
+                  'name': "${_filteredCoins[index]['name']} (${_filteredCoins[index]['symbol']})",
+                  'price': _filteredCoins[index]['price'],
+                  'change': _filteredCoins[index]['change'],
+                  'isUp': _filteredCoins[index]['isUp'],
+                }),
+              ),
+            );
+          },
+          leading: CircleAvatar(
+            backgroundColor: const Color(0xFFF2F4F6),
+            child: Icon(_filteredCoins[index]['icon'], color: const Color(0xFF3182F6), size: 20),
+          ),
+          title: Text(_filteredCoins[index]['name'], style: const TextStyle(fontWeight: FontWeight.bold)),
+          subtitle: Text(_filteredCoins[index]['symbol']),
+          trailing: Text("NT\$ ${_filteredCoins[index]['price']}", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+        ),
+      ),
+    );
+  }
+}
+
+// [해결] 누락된 코인 상세 화면 클래스를 추가합니다.
+// [전체 교체] 누락된 코인 상세 화면 클래스를 기능 구현까지 포함하여 정의합니다.
+class CryptoDetailScreen extends StatelessWidget {
+  final Map<String, dynamic> stock; // 전달받은 코인 데이터
+
+  const CryptoDetailScreen({super.key, required this.stock});
+
+  @override
+  Widget build(BuildContext context) {
+    // 이전 화면에서 전달받은 데이터를 기반으로 화면을 구성합니다.
+    final isPositive = !(stock['change']?.toString().contains('-') ?? false);
+    final String priceStr = stock['price'] ?? '0.0';
+    final currentPrice = double.tryParse(priceStr.replaceAll(',', '')) ?? 0.0;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(stock['name'] ?? '詳情'),
+        elevation: 0,
+        scrolledUnderElevation: 0, // 스크롤 시 앱바 색상 변함 방지
+      ),
+      body: Column(
+        children: [
+          // 1. 상단 정보 (이름, 현재가, 변동률)
+          Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      stock['symbol'] ?? '',
+                      style: const TextStyle(fontSize: 18, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      "NT\$ ${stock['price']}",
+                      style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: (isPositive ? Colors.red : Colors.blue).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    "${isPositive ? '+' : ''}${stock['change']}%",
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: isPositive ? Colors.red : Colors.blue, // 대만은 상승이 빨간색입니다.
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const Divider(height: 1, thickness: 1),
+          Expanded(
+            child: CryptoOrderPanel(currentPrice: currentPrice),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ----------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------
+class CryptoOrderPanel extends StatefulWidget {
+  final double currentPrice; // 현재 코인 가격
+
+  const CryptoOrderPanel({super.key, required this.currentPrice});
+
+  @override
+  State<CryptoOrderPanel> createState() => _CryptoOrderPanelState();
+}
+
+class _CryptoOrderPanelState extends State<CryptoOrderPanel> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  final TextEditingController _quantityController = TextEditingController(); // 수량 입력 필드 컨트롤러
+  final TextEditingController _priceController = TextEditingController(); // 가격 입력 필드 컨트롤러
+  bool _isChartVisible = false;
+
+  // 상태 변수들
+  double _totalAmount = 0.0; // 총액
+  double _krwBalance = 100000000.0; // 사용자의 가상 원화 잔고 (1억 KRW)
+  double _btcBalance = 0.5; // 사용자의 가상 비트코인 잔고 (0.5 BTC)
+  double _selectedPrice = 0.0; // 사용자가 선택한 호가 가격
+
+  // 가상의 호가 데이터 (이미지와 비슷하게 구성)
+  final List<Map<String, dynamic>> _askHogas = []; // 매도 호가 (파란색 계열)
+  final List<Map<String, dynamic>> _bidHogas = []; // 매수 호가 (빨간색 계열)
+
+  @override
+  void initState() {
+    super.initState();
+    // 탭바 컨트롤러 초기화 (0: 매수, 1: 매도, 2: 거래내역)
+    _tabController = TabController(length: 3, vsync: this);
+    _selectedPrice = widget.currentPrice;
+    _priceController.text = _formatNumber(widget.currentPrice); // 초기 가격 설정
+    _quantityController.text = '0.0';
+    _updateTotal(); // 초기 총액 계산
+
+    // 가상의 호가 데이터 생성
+    _generateDummyHogas();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _quantityController.dispose();
+    _priceController.dispose();
+    super.dispose();
+  }
+
+  // 총액 업데이트 함수
+  void _updateTotal() {
+    setState(() {
+      final double quantity = double.tryParse(_quantityController.text.replaceAll(',', '')) ?? 0.0;
+      final double price = double.tryParse(_priceController.text.replaceAll(',', '')) ?? 0.0;
+      _totalAmount = quantity * price;
+    });
+  }
+
+  // 숫자 포맷 함수 (세자리마다 콤마)
+  String _formatNumber(double number) {
+    return number.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},');
+  }
+
+  // 가상의 호가 데이터 생성 함수 (현재가 기준으로 위아래 생성)
+  void _generateDummyHogas() {
+    // 매도 호가 (위로 갈수록 비싸짐)
+    for (int i = 5; i > 0; i--) {
+      _askHogas.add({
+        'price': widget.currentPrice + (i * 10000.0), // 가격 단위 1만 원으로 설정
+        'change': -5.00 + (0.01 * i), // 가상의 전일대비
+        'quantity': 0.001 + (0.1 * i), // 가상의 수량
+      });
+    }
+    // 매수 호가 (아래로 갈수록 싸짐)
+    for (int i = 1; i <= 5; i++) {
+      _bidHogas.add({
+        'price': widget.currentPrice - (i * 10000.0), // 가격 단위 1만 원으로 설정
+        'change': -5.01 - (0.1 * i), // 가상의 전일대비
+        'quantity': 1.555 - (0.1 * i), // 가상의 수량
+      });
+    }
+  }
+
+  // 주문 실행 시뮬레이션 함수
+  void _executeOrder(String orderType) {
+    final double quantity = double.tryParse(_quantityController.text.replaceAll(',', '')) ?? 0.0;
+    final double price = double.tryParse(_priceController.text.replaceAll(',', '')) ?? 0.0;
+    final double total = quantity * price;
+
+    if (quantity <= 0 || price <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("請輸入有效的數量和價格。"), backgroundColor: Colors.orange));
+      return;
+    }
+
+    if (orderType == '매수') {
+      if (total > _krwBalance) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("餘額 KRW 不足。"), backgroundColor: Colors.red));
+      } else {
+        setState(() {
+          _krwBalance -= total;
+          _btcBalance += quantity;
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("已下單 NT\$ ${_formatNumber(total)} 買入。"), backgroundColor: Colors.green));
+          // 입력 필드 초기화
+          _quantityController.text = '0.0';
+          _updateTotal();
+        });
+      }
+    } else if (orderType == '매도') {
+      if (quantity > _btcBalance) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("餘額 BTC 不足。"), backgroundColor: Colors.red));
+      } else {
+        setState(() {
+          _btcBalance -= quantity;
+          _krwBalance += total;
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("已下單 NT\$ ${_formatNumber(total)} 賣出。"), backgroundColor: Colors.green));
+          // 입력 필드 초기화
+          _quantityController.text = '0.0';
+          _updateTotal();
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    return Row(
+      children: [
+        // --- 1. 왼쪽: 호가창 영역 (보여주신 사진의 왼쪽 부분) ---
+        Expanded(
+          flex: 2, // 호가창이 주문창보다 좁게
+          child: Container(
+            color: isDarkMode ? Colors.black.withOpacity(0.5) : const Color(0xFFE8F1FC), // 매도 루프 배경색
+            child: ListView(
+              padding: const EdgeInsets.only(top: 10),
+              children: [
+                // 1-1. 매도 호가 리스트 (파란색 계열)
+                ..._askHogas.map((hoga) => _buildHogaRow(hoga, Colors.blue[900]!, Colors.blue[100]!)),
+
+                // 1-2. 현재가 행 (강조 표시)
+                _buildCurrentPriceRow(),
+
+                // 1-3. 매수 호가 리스트 (빨간색 계열)
+                ..._bidHogas.map((hoga) => _buildHogaRow(hoga, Colors.red[900]!, Colors.red[100]!)),
+
+                const SizedBox(height: 20),
+                // 하단 수량(BTC) 버튼
+                Center(
+                  child: TextButton(
+                      onPressed: () {},
+                      child: Text("數量(BTC) ▲", style: TextStyle(color: isDarkMode ? Colors.white70 : Colors.black87),)),
+                ),
+                const SizedBox(height: 10),
+              ],
+            ),
+          ),
+        ),
+
+        // --- 2. 오른쪽: 주문창 영역 (보여주신 사진의 오른쪽 부분) ---
+        Expanded(
+          flex: 3, // 주문창이 호가창보다 넓게
+          child: Column(
+            children: [
+              Align(
+                alignment: Alignment.topRight,
+                child: InkWell(
+                  onTap: () {
+                    setState(() {
+                      _isChartVisible = !_isChartVisible; // 클릭 시 차트 토글
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        const Icon(Icons.show_chart, color: Colors.red, size: 20), // 작은 그래프 아이콘
+                        Text(_isChartVisible ? "차트 닫기 ▲" : "차트 보기 ▼",
+                            style: const TextStyle(fontSize: 10, color: Colors.grey)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+
+              // 2) 조건부 차트 표시 (클릭했을 때만 나타남)
+              if (_isChartVisible)
+                Container(
+                  height: 150, // 펼쳐졌을 때 차트 높이
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: CryptoChart(
+                      isPositive: !(widget.currentPrice.toString().contains('-')),
+                      basePrice: widget.currentPrice
+                  ),
+                ),
+              // 2-1. 상단 탭바 (매수, 매도, 거래내역)
+              TabBar(
+                controller: _tabController,
+                indicatorColor: _tabController.index == 0 ? Colors.red : (_tabController.index == 1 ? Colors.blue : Colors.grey),
+                labelColor: Theme.of(context).textTheme.bodyLarge?.color,
+                unselectedLabelColor: Colors.grey,
+                indicatorSize: TabBarIndicatorSize.tab,
+                indicatorWeight: 3,
+                tabs: const [
+                  Tab(text: "買入"),
+                  Tab(text: "賣出"),
+                  Tab(text: "交易紀錄"),
+                ],
+                onTap: (index) => setState(() {}), // 탭 클릭 시 화면 업데이트
+              ),
+
+              const SizedBox(height: 10),
+
+              // 2-2. 주문 방식 선택 (지정, 시장, 예약)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
+                    _buildOrderMethod('指定', true),
+                    _buildOrderMethod('市場', false),
+                    _buildOrderMethod('預約', false),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // 2-3. 주문가능 금액 표시
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text("可買金額", style: TextStyle(color: Colors.grey)),
+                    Text(
+                      _tabController.index == 0 ? "${_formatNumber(_krwBalance)} KRW" : "${_formatNumber(_btcBalance)} BTC",
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              // 2-4. 입력 필드 및 버튼 영역 (Expanded로 탭바 아래 공간 채움)
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 수량 입력 필드
+                      _buildInputField(
+                        controller: _quantityController,
+                        label: '數量',
+                        suffix: 'BTC',
+                        isQuantity: true,
+                        // 보여주신 사진과 같은 '가능' 드롭다운 버튼 대용
+                        action: Center(
+                          child: TextButton(
+                            onPressed: () {},
+                            child: const Text("가능 ▼", style: TextStyle(color: Colors.grey),),),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+
+                      // 가격 입력 필드
+                      _buildInputField(
+                        controller: _priceController,
+                        label: '價格',
+                        suffix: 'KRW',
+                        // 보여주신 사진과 같은 가격 조정 +/- 버튼
+                        action: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            IconButton(onPressed: () {}, icon: const Icon(Icons.remove, size: 20, color: Colors.grey,)),
+                            IconButton(onPressed: () {}, icon: const Icon(Icons.add, size: 20, color: Colors.grey,)),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      // 총액 표시
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text("總額", style: TextStyle(color: Colors.grey, fontSize: 16)),
+                          Text(
+                            "${_formatNumber(_totalAmount)} KRW",
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+
+                      const Spacer(), // 하단 버튼을 아래로 밈
+
+                      // 2-5. 초기화 및 매수/매도 버튼
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton(
+                              onPressed: () {
+                                setState(() {
+                                  _quantityController.text = '0.0';
+                                  _updateTotal();
+                                });
+                              },
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.grey[800], padding: const EdgeInsets.all(16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                              child: const Text("重置", style: TextStyle(color: Colors.white, fontSize: 16)),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            flex: 2,
+                            child: ElevatedButton(
+                              onPressed: () => _executeOrder(_tabController.index == 0 ? '매수' : '매도'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: _tabController.index == 0 ? Colors.red[700] : Colors.blue[700],
+                                padding: const EdgeInsets.all(16),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              ),
+                              child: Text(
+                                _tabController.index == 0 ? "買入" : "賣出",
+                                style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+
+                      const SizedBox(height: 10),
+                      // 최소주문금액 정보
+                      const Text("最小訂單金額 5,000 KRW", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                      const Text("手續費 0.05%", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                      const Text("訂單類型指南", style: TextStyle(color: Colors.grey, fontSize: 12)),
+                    ],
+                  ),
+                ),
+              ),
+
+              // 하단 호가주문 버튼
+              Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  color: isDarkMode ? Colors.black.withOpacity(0.8) : Colors.white,
+                  child: TextButton(onPressed: () {}, child: const Text("호가주문"))),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // --- 위젯 구성 요소 빌더 함수들 ---
+
+  // 호가창의 한 행을 그리는 위젯
+  Widget _buildHogaRow(Map<String, dynamic> hoga, Color textColor, Color bgColor) {
+    return InkWell(
+      onTap: () {
+        // ⭐ [핵심 기능] 호가창 클릭 시 주문창의 가격을 해당 가격으로 업데이트합니다.
+        setState(() {
+          _selectedPrice = hoga['price'];
+          _priceController.text = _formatNumber(_selectedPrice);
+          _updateTotal();
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        color: bgColor,
+        child: Row(
+          children: [
+            // 1) 가격 영역
+            Expanded(
+              flex: 4,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(_formatNumber(hoga['price']), style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 14)),
+                  Text("${hoga['change']}%", style: TextStyle(color: textColor, fontSize: 11)),
+                ],
+              ),
+            ),
+
+            // 2) 수량 영역
+            Expanded(
+              flex: 2,
+              child: Container(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  _formatNumber(hoga['quantity']), // 간소화를 위해 수량 포맷 동일 적용
+                  style: TextStyle(color: textColor, fontSize: 13),
+                  overflow: TextOverflow.ellipsis, // 길어지면 ... 표시
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 현재가 행 위젯 (강조 표시)
+  Widget _buildCurrentPriceRow() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      color: _tabController.index == 0 ? const Color(0xFFFBE9E9) : const Color(0xFFE8F1FB), // 매수/매도 탭에 따라 배경색 변경
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            _formatNumber(widget.currentPrice),
+            style: TextStyle(
+                color: widget.currentPrice == widget.currentPrice ? Theme.of(context).textTheme.bodyLarge?.color : Colors.grey,
+                fontWeight: FontWeight.bold,
+                fontSize: 16
+            ),
+          ),
+          const SizedBox(width: 8),
+          const Spacer(),
+          Text("-5.01%", style: TextStyle(color: Theme.of(context).brightness == Brightness.dark ? Colors.grey : Colors.grey)),
+          const SizedBox(width: 15),
+          const Text("1.555", style: TextStyle(color: Colors.grey)),
+        ],
+      ),
+    );
+  }
+
+  // 주문 방식 선택 라디오 위젯
+  Widget _buildOrderMethod(String method, bool isSelected) {
+    return Row(
+      children: [
+        Icon(isSelected ? Icons.radio_button_checked : Icons.radio_button_off, size: 20, color: isSelected ? Colors.red : Colors.grey),
+        const SizedBox(width: 4),
+        Text(method, style: TextStyle(color: isSelected ? Colors.red : Colors.grey)),
+      ],
+    );
+  }
+
+  // 입력 필드 위젯
+  Widget _buildInputField({
+    required TextEditingController controller,
+    required String label,
+    required String suffix,
+    required Widget action, // +/- 버튼 또는 '가능' 드롭다운 버튼
+    bool isQuantity = false, // 수량 필드 여부
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.only(left: 10),
+      decoration: BoxDecoration(
+        color: Theme.of(context).scaffoldBackgroundColor.withOpacity(0.1), // 입력 필드 배경색
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          // 1) 라벨 (수량/가격)
+          SizedBox(width: 35, child: Text(label, style: const TextStyle(color: Colors.grey))),
+
+          // 2) 입력 필드
+          Expanded(
+            child: TextField(
+              controller: controller,
+              textAlign: TextAlign.right,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              decoration: const InputDecoration(border: InputBorder.none, contentPadding: EdgeInsets.zero, hintText: '0'),
+              onChanged: (value) {
+                // 수동 입력 시 포맷팅 및 총액 업데이트
+                if (value.isEmpty) {
+                  controller.text = '0.0';
+                  _updateTotal();
+                  return;
+                }
+                final String unformatted = value.replaceAll(',', '');
+                final double num = double.tryParse(unformatted) ?? 0.0;
+
+                // 수량 필드만 소수점 유지, 가격 필드는 정수 포맷
+                controller.text = isQuantity ? num.toString() : _formatNumber(num);
+                _updateTotal();
+              },
+            ),
+          ),
+
+          // 3) 단위 (BTC/KRW)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Text(suffix, style: const TextStyle(color: Colors.grey)),
+          ),
+
+          // 4) 액션 버튼 영역 (+/- 또는 가능▼)
+          SizedBox(width: isQuantity ? 70 : 100, child: action),
+        ],
+      ),
+    );
+  }
+}
+
+// [해결] 클릭 시 나타날 차트 위젯 본체입니다. 파일 맨 밑에 추가하세요.
+class CryptoChart extends StatefulWidget {
+  final bool isPositive;
+  final double basePrice;
+
+  const CryptoChart({super.key, required this.isPositive, required this.basePrice});
+
+  @override
+  State<CryptoChart> createState() => _CryptoChartState();
+}
+
+class _CryptoChartState extends State<CryptoChart> {
+  List<FlSpot> _spots = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _generateData();
+  }
+
+  void _generateData() {
+    final random = Random();
+    _spots = List.generate(15, (i) {
+      double fluctuation = (random.nextDouble() - 0.6) * 0.02;
+      return FlSpot(i.toDouble(), widget.basePrice * (1 + fluctuation));
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final chartColor = widget.isPositive ? Colors.red : Colors.blue;
+
+    return LineChart(
+      LineChartData(
+        gridData: FlGridData(show: false), // const 제거됨
+        titlesData: FlTitlesData(show: false), // const 제거됨
+        borderData: FlBorderData(show: false),
+        lineBarsData: [
+          LineChartBarData(
+            spots: _spots,
+            isCurved: true,
+            color: chartColor,
+            barWidth: 2,
+            dotData: FlDotData(show: false), // const 제거됨
+            belowBarData: BarAreaData(
+              show: true,
+              color: chartColor.withOpacity(0.1),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// [9] 마이 화면 (我的 - 다크모드 설정 포함 상세 구현)
+class MyScreen extends StatefulWidget {
+  final Function(ThemeMode) onChangeTheme;
+  final ThemeMode currentMode;
+
+  const MyScreen({
+    super.key,
+    required this.onChangeTheme,
+    required this.currentMode
+  });
+
+  @override
+  State<MyScreen> createState() => _MyScreenState();
+}
+
+class _MyScreenState extends State<MyScreen> {
+  // 상세 페이지 이동 함수
+  void _navigateToDetail(String title) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => SubDetailPage(title: title)),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    bool isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        actions: [
+          IconButton(
+              onPressed: () => _navigateToDetail("設定"),
+              icon: Icon(Icons.settings_outlined, color: isDark ? Colors.white : const Color(0xFF4E5968))
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        child: Column(children: [
+          // 1. 프로필 섹션 (點擊可進入編輯)
+          GestureDetector(
+            onTap: () => _navigateToDetail("編輯個人資料"),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+              child: Row(children: [
+                CircleAvatar(
+                  radius: 35,
+                  backgroundColor: isDark ? Colors.grey[800] : Colors.white,
+                  child: const Icon(Icons.person, size: 40, color: Color(0xFFB0B8C1)),
+                ),
+                const SizedBox(width: 16),
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text("鄭聖雨", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                        color: isDark ? Colors.grey[850] : Colors.white,
+                        borderRadius: BorderRadius.circular(5)
+                    ),
+                    child: const Text("編輯個人資料 >", style: TextStyle(fontSize: 12, color: Color(0xFF6B7684))),
+                  ),
+                ]),
+              ]),
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // 2. 테마 설정 섹션
+          _buildMenuSection([
+            ListTile(
+              leading: Icon(isDark ? Icons.dark_mode : Icons.light_mode,
+                  color: isDark ? Colors.amber : Colors.orange),
+              title: const Text("夜間模式", style: TextStyle(fontWeight: FontWeight.w500)),
+              trailing: Switch(
+                value: isDark,
+                activeColor: const Color(0xFF3182F6),
+                onChanged: (val) {
+                  widget.onChangeTheme(val ? ThemeMode.dark : ThemeMode.light);
+                },
+              ),
+            ),
+          ], context),
+
+          const SizedBox(height: 12),
+
+          // 3. 주요 메뉴 그룹
+          _buildMenuSection([
+            _menuTile(Icons.notifications_none_rounded, "通知設定", () => _navigateToDetail("通知設定"), context),
+            _menuTile(Icons.security_rounded, "認證與安全", () => _navigateToDetail("認證與安全"), context),
+            _menuTile(Icons.account_balance_wallet_outlined, "我的付款方式", () => _navigateToDetail("我的付款方式"), context),
+          ], context),
+
+          const SizedBox(height: 12),
+
+          // 4. 서비스 지원 및 로그아웃
+          _buildMenuSection([
+            _menuTile(Icons.headset_mic_outlined, "客服中心", () => _navigateToDetail("客服中心"), context),
+            _menuTile(Icons.card_giftcard_rounded, "邀請好友活動", () => _navigateToDetail("邀請好友活動"), context, color: Colors.red),
+            ListTile(
+              onTap: () => _showLogoutDialog(context),
+              leading: const Icon(Icons.logout_rounded, color: Color(0xFFF04452)),
+              title: const Text("登出", style: TextStyle(color: Color(0xFFF04452), fontWeight: FontWeight.w600)),
+            ),
+          ], context),
+
+          const SizedBox(height: 40),
+          const Text("版本資訊 1.0.0", style: TextStyle(color: Color(0xFFB0B8C1), fontSize: 12)),
+          const SizedBox(height: 40),
+        ]),
+      ),
+    );
+  }
+
+  Widget _buildMenuSection(List<Widget> children, BuildContext context) {
+    bool isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+          borderRadius: BorderRadius.circular(22)
+      ),
+      child: Column(children: children),
+    );
+  }
+
+  Widget _menuTile(IconData icon, String title, VoidCallback onTap, BuildContext context, {Color? color}) {
+    return ListTile(
+      leading: Icon(icon, color: color ?? (Theme.of(context).brightness == Brightness.dark ? Colors.white70 : const Color(0xFF4E5968))),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
+      trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Color(0xFFB0B8C1)),
+      onTap: onTap,
+    );
+  }
+
+  void _showLogoutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (c) => AlertDialog(
+        backgroundColor: Theme.of(context).brightness == Brightness.dark ? const Color(0xFF1C1C1E) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text("登出", style: TextStyle(fontWeight: FontWeight.bold)),
+        content: const Text("確定要登出嗎？"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(c), child: const Text("取消", style: TextStyle(color: Colors.grey))),
+          TextButton(
+            onPressed: () => Navigator.pop(c),
+            child: const Text("登出", style: TextStyle(color: Color(0xFFF04452), fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// 공통 서브 상세 페이지
+class SubDetailPage extends StatefulWidget {
+  final String title;
+  const SubDetailPage({super.key, required this.title});
+
+  @override
+  State<SubDetailPage> createState() => _SubDetailPageState();
+}
+
+class _SubDetailPageState extends State<SubDetailPage> {
+  // [보내주신 변수들 그대로 유지]
+  String _displayPrice = "正在讀取數據... (데이터 읽는 중)";
+  bool _isLoading = true;
+
+  // 🚀 [수정] 전역에 있던 myAssets를 클래스 내부로 이동
+  List<AssetData> myAssets = [];
+  List<FlSpot> _chartData = [];
+  double _timeCounter = 0;
+  Timer? _timer;
+  List<FlSpot> _coinChartData = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchRealTimePrice(); // 기존 호출
+    loadData();            // 보내주신 loadData 호출
+
+    _timer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      loadData();
+      _fetchRealTimePrice();
+      print("새로고침 완료: ${DateTime.now()}");
+    });
+  }
+
+  // 🚀 [중요] 페이지 나갈 때 타이머를 꺼줘야 앱이 안 무거워짐
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  // [수정] 전역에 있던 loadData를 클래스 내부로 이동 (setState 사용 가능해짐)
+  void loadData() async {
+    try {
+      void loadData() async {
+        try {
+          AssetData stock = await ApiService.fetchTaiwanStock("2330");
+          AssetData coin = await ApiService.fetchCoinData("bitcoin");
+
+          if (mounted) {
+            setState(() {
+              myAssets = [stock, coin];
+              // 그래프 점 추가 (가격이 같아도 x축을 늘려 선이 그려지게 함)
+              _chartData.add(FlSpot(_timeCounter, stock.price));
+              _coinChartData.add(FlSpot(_timeCounter, coin.price));
+              _timeCounter += 1;
+              if (_chartData.length > 30) _chartData.removeAt(0);
+              if (_coinChartData.length > 30) _coinChartData.removeAt(0);
+            });
+          }
+        } catch (e) {
+          print("API Error: $e");
+        }
+      }
+      // 대만 주식(2330 - TSMC)과 비트코인 호출
+      AssetData stock = await ApiService.fetchTaiwanStock("2330");
+      AssetData coin = await ApiService.fetchCoinData("bitcoin");
+
+      setState(() {
+        myAssets = [stock, coin];
+      });
+    } catch (e) {
+      print("API Error: $e");
+    }
+  }
+
+  //  기존 실시간 시세 함수 그대로 유지
+  Future<void> _fetchRealTimePrice() async {
+    try {
+      if (widget.title == "我的付款方式") {
+        final response = await http.get(Uri.parse(
+            'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=twd'));
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          setState(() {
+            _displayPrice = "BTC: \$ ${data['bitcoin']['twd']} TWD";
+            _isLoading = false;
+          });
+        }
+      } else {
+        setState(() {
+          _displayPrice = "${widget.title} 畫面準備中";
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _displayPrice = "連線 실패 (에러 발생)";
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(widget.title), elevation: 0),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _isLoading
+                ? const CircularProgressIndicator(color: Color(0xFF3182F6))
+                : const Icon(Icons.construction_rounded, size: 80, color: Color(0xFFB0B8C1)),
+            const SizedBox(height: 20),
+            if (_chartData.isNotEmpty)
+              Container(
+                height: 200,
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: LineChart(
+                  LineChartData(
+                    minY: myAssets.isNotEmpty ? (myAssets[0].price - 5) : 0,
+                    maxY: myAssets.isNotEmpty ? (myAssets[0].price + 5) : 1000,
+
+                    gridData: FlGridData(show: false),
+                    titlesData: FlTitlesData(show: false),
+                    borderData: FlBorderData(show: false),
+                    lineBarsData: [
+                      LineChartBarData(
+                        spots: _chartData,
+                        isCurved: true,
+                        color: const Color(0xFF3182F6), // 0.66.0 버전용 colors 리스트
+                        barWidth: 4,
+                        dotData: FlDotData(show: false),
+                        belowBarData: BarAreaData(
+                          show: true,
+                          color: const Color(0xFF3182F6).withOpacity(0.1),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Text(
+                  _displayPrice,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                      fontSize: 20,
+                      color: Color(0xFF3182F6),
+                      fontWeight: FontWeight.bold
+                  )
+              ),
+            ),
+            // loadData로 가져온 데이터가 있을 경우 간단히 표시 (누락 방지)
+            if (myAssets.isNotEmpty)
+              Text("최신 자산: ${myAssets[0].name} ${myAssets[0].price} TWD"),
+          ],
+        ),
+      ),
+    );
+  }
+} // <--- _SubDetailPageState 클래스 끝
+
+// [10] API 관련 부분 (보내주신 내용 그대로 - 수정 없음)
+class AssetData {
+  final String name;
+  final String symbol;
+  final double price;
+  final double change;
+
+  AssetData({
+    required this.name,
+    required this.symbol,
+    required this.price,
+    required this.change,
+  });
+}
+
+class ApiService {
+  static Future<AssetData> fetchTaiwanStock(String stockId) async {
+    // 1. 오늘 기준 7일 전 날짜를 계산 (주말/공휴일 방어용)
+    DateTime now = DateTime.now();
+    String startDate = "${now.year}-${now.month.toString().padLeft(2, '0')}-${(now.day - 7).toString().padLeft(2, '0')}";
+
+// 2. 고정된 날짜 대신 변수(startDate)를 주소에 넣음
+    final url = Uri.parse('https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=$stockId&start_date=$startDate');
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body)['data'].last;
+      return AssetData(
+        name: "台積電",
+        symbol: stockId,
+         price: data['close'].toDouble(),
+        change: 1.5,
+      );
+    } else {
+      throw Exception('Failed to load Stock');
+    }
+  }
+
+  static Future<AssetData> fetchCoinData(String coinId) async {
+    final url = Uri.parse('https://api.coingecko.com/api/v3/simple/price?ids=$coinId&vs_currencies=twd&include_24hr_change=true');
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body)[coinId];
+      return AssetData(
+        name: coinId.toUpperCase(),
+        symbol: coinId.substring(0, 3).toUpperCase(),
+        price: data['twd'].toDouble(),
+        change: data['twd_24h_change'].toDouble(),
+      );
+    } else {
+      throw Exception('Failed to load Coin');
+    }
+  }
+}
